@@ -14,7 +14,6 @@ layout="wide",
 st.title("💎 JOYA TREND LIVE")
 st.caption("Cartelera automática usando TheSportsDB + football-data.org")
 
-
 def get_secret(name):
 try:
 return st.secrets[name]
