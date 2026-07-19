@@ -1,0 +1,5 @@
+date,league,home_team,away_team,category,market,home_hits,home_sample,away_hits,away_sample,league_rate,joya_score,tier,calibrated_probability,odds,ev_pct,reliability_score,trend_strength
+2026-07-19,Premier League,Equipo A,Equipo B,Goles,Sin gol 0-10,9,10,8,10,82,93,S++,0.82,1.42,16.4,88,Muy fuerte
+2026-07-19,La Liga,Equipo C,Equipo D,Goles,Gol antes del 70,9,10,9,10,86,92,S++,0.81,1.36,10.2,86,Muy fuerte
+2026-07-19,Serie A,Equipo E,Equipo F,Córners,+8.5 córners,8,10,9,10,79,89,S+,0.76,1.7,29.2,82,Fuerte
+2026-07-19,Liga Demo,Equipo G,Equipo H,Tarjetas,+2.5 tarjetas,10,10,8,10,84,91,S++,0.8,1.5,20.0,84,Muy fuerte
