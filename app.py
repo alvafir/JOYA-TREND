@@ -1,4 +1,3 @@
-
 from datetime import date, timedelta
 
 import pandas as pd
@@ -7,195 +6,292 @@ import streamlit as st
 
 
 st.set_page_config(
-    page_title="JOYA TREND LIVE",
-    page_icon="💎",
-    layout="wide",
+page_title="JOYA TREND LIVE",
+page_icon="💎",
+layout="wide",
 )
 
 st.title("💎 JOYA TREND LIVE")
-st.caption("Partidos reales + diagnóstico de conexión")
+st.caption("Cartelera automática usando TheSportsDB + football-data.org")
 
 
-def get_api_key() -> str:
-    try:
-        key = st.secrets["FOOTBALL_DATA_API_KEY"]
-        if not key:
-            raise KeyError
-        return key
-    except Exception:
-        st.error("No se encontró FOOTBALL_DATA_API_KEY en los Secrets de Streamlit.")
-        st.stop()
+def get_secret(name):
+try:
+return st.secrets[name]
+except Exception:
+return None
 
 
 @st.cache_data(ttl=300)
-def api_get(endpoint: str, api_key: str, params: dict | None = None):
-    url = f"https://api.football-data.org/v4/{endpoint}"
-    headers = {"X-Auth-Token": api_key}
+def get_thesportsdb_matches(target_date, api_key):
+url = (
+f"https://www.thesportsdb.com/api/v1/json/"
+f"{api_key}/eventsday.php"
+)
 
-    try:
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params or {},
-            timeout=20,
-        )
+params = {
+"d": target_date,
+"s": "Soccer",
+}
 
-        status_code = response.status_code
+try:
+response = requests.get(
+url,
+params=params,
+timeout=20,
+)
+response.raise_for_status()
+data = response.json()
+return {
+"ok": True,
+"status": response.status_code,
+"events": data.get("events") or [],
+}
 
-        try:
-            payload = response.json()
-        except ValueError:
-            payload = {"raw": response.text}
-
-        return {
-            "ok": response.ok,
-            "status_code": status_code,
-            "payload": payload,
-            "url": response.url,
-        }
-
-    except requests.RequestException as exc:
-        return {
-            "ok": False,
-            "status_code": None,
-            "payload": {"error": str(exc)},
-            "url": url,
-        }
-
-
-def matches_to_df(matches: list[dict]) -> pd.DataFrame:
-    rows = []
-
-    for match in matches:
-        competition = match.get("competition", {})
-        home = match.get("homeTeam", {})
-        away = match.get("awayTeam", {})
-
-        rows.append(
-            {
-                "Competición": competition.get("name", ""),
-                "Local": home.get("name", ""),
-                "Visitante": away.get("name", ""),
-                "Hora UTC": match.get("utcDate", ""),
-                "Estado": match.get("status", ""),
-            }
-        )
-
-    return pd.DataFrame(rows)
+except Exception as exc:
+return {
+"ok": False,
+"status": None,
+"events": [],
+"error": str(exc),
+}
 
 
-api_key = get_api_key()
+@st.cache_data(ttl=300)
+def get_football_data_matches(target_date, api_key):
+if not api_key:
+return {
+"ok": False,
+"status": None,
+"matches": [],
+}
+
+next_date = (
+date.fromisoformat(target_date)
++ timedelta(days=1)
+).isoformat()
+
+url = "https://api.football-data.org/v4/matches"
+
+headers = {
+"X-Auth-Token": api_key
+}
+
+params = {
+"dateFrom": target_date,
+"dateTo": next_date,
+}
+
+try:
+response = requests.get(
+url,
+headers=headers,
+params=params,
+timeout=20,
+)
+response.raise_for_status()
+data = response.json()
+
+return {
+"ok": True,
+"status": response.status_code,
+"matches": data.get("matches") or [],
+}
+
+except Exception as exc:
+return {
+"ok": False,
+"status": None,
+"matches": [],
+"error": str(exc),
+}
+
+
+def parse_thesportsdb(events):
+rows = []
+
+for event in events:
+rows.append(
+{
+"Fuente": "TheSportsDB",
+"Competición": event.get("strLeague", ""),
+"Local": event.get("strHomeTeam", ""),
+"Visitante": event.get("strAwayTeam", ""),
+"Fecha": event.get("dateEvent", ""),
+"Hora": event.get("strTime", ""),
+"Estado": event.get("strStatus", ""),
+}
+)
+
+return rows
+
+
+def parse_football_data(matches):
+rows = []
+
+for match in matches:
+competition = match.get("competition", {})
+home = match.get("homeTeam", {})
+away = match.get("awayTeam", {})
+
+rows.append(
+{
+"Fuente": "football-data.org",
+"Competición": competition.get("name", ""),
+"Local": home.get("name", ""),
+"Visitante": away.get("name", ""),
+"Fecha": match.get("utcDate", "")[:10],
+"Hora": match.get("utcDate", "")[11:16],
+"Estado": match.get("status", ""),
+}
+)
+
+return rows
+
+
+thesportsdb_key = get_secret(
+"THESPORTSDB_API_KEY"
+)
+
+football_data_key = get_secret(
+"FOOTBALL_DATA_API_KEY"
+)
+
 
 if "selected_date" not in st.session_state:
-    st.session_state.selected_date = date.today()
+st.session_state.selected_date = date.today()
+
 
 c1, c2, c3 = st.columns(3)
 
 with c1:
-    if st.button("📅 HOY", use_container_width=True):
-        st.session_state.selected_date = date.today()
+if st.button(
+"📅 HOY",
+use_container_width=True
+):
+st.session_state.selected_date = date.today()
 
 with c2:
-    if st.button("📅 MAÑANA", use_container_width=True):
-        st.session_state.selected_date = date.today() + timedelta(days=1)
-
-with c3:
-    selected = st.date_input(
-        "🗓 Elegir fecha",
-        value=st.session_state.selected_date,
-    )
-    st.session_state.selected_date = selected
-
-selected_date = st.session_state.selected_date
-date_from = selected_date.strftime("%Y-%m-%d")
-date_to = (selected_date + timedelta(days=1)).strftime("%Y-%m-%d")
-
-st.subheader(f"⚽ Partidos del {date_from}")
-
-matches_result = api_get(
-    "matches",
-    api_key,
-    params={
-        "dateFrom": date_from,
-        "dateTo": date_to,
-    },
+if st.button(
+"📅 MAÑANA",
+use_container_width=True
+):
+st.session_state.selected_date = (
+date.today()
++ timedelta(days=1)
 )
 
-competitions_result = api_get("competitions", api_key)
+with c3:
+selected = st.date_input(
+"🗓 Elegir fecha",
+value=st.session_state.selected_date,
+)
 
-with st.expander("🧪 Diagnóstico de conexión", expanded=True):
-    c1, c2, c3, c4 = st.columns(4)
+st.session_state.selected_date = selected
 
-    c1.metric(
-        "API",
-        "Conectada" if matches_result["ok"] else "Error",
-    )
 
-    c2.metric(
-        "Código HTTP",
-        matches_result["status_code"] if matches_result["status_code"] else "N/D",
-    )
+target_date = (
+st.session_state.selected_date
+.strftime("%Y-%m-%d")
+)
 
-    competitions = competitions_result["payload"].get("competitions", []) if competitions_result["ok"] else []
 
-    c3.metric(
-        "Competiciones disponibles",
-        len(competitions),
-    )
+st.subheader(
+f"⚽ Partidos del {target_date}"
+)
 
-    matches = matches_result["payload"].get("matches", []) if matches_result["ok"] else []
 
-    c4.metric(
-        "Partidos encontrados",
-        len(matches),
-    )
+sportsdb_result = get_thesportsdb_matches(
+target_date,
+thesportsdb_key or "123",
+)
 
-    if not matches_result["ok"]:
-        st.error("La consulta de partidos falló.")
-        st.json(matches_result["payload"])
+football_result = get_football_data_matches(
+target_date,
+football_data_key,
+)
 
-    if not competitions_result["ok"]:
-        st.warning("No se pudieron consultar las competiciones disponibles.")
-        st.json(competitions_result["payload"])
 
-if competitions:
-    with st.expander("🏆 Competiciones disponibles en tu cuenta"):
-        comp_df = pd.DataFrame(
-            [
-                {
-                    "Código": c.get("code", ""),
-                    "Competición": c.get("name", ""),
-                    "Área": c.get("area", {}).get("name", ""),
-                }
-                for c in competitions
-            ]
-        )
-        st.dataframe(comp_df, use_container_width=True, hide_index=True)
+sportsdb_rows = parse_thesportsdb(
+sportsdb_result["events"]
+)
 
-if matches_result["ok"]:
-    matches = matches_result["payload"].get("matches", [])
-    df = matches_to_df(matches)
+football_rows = parse_football_data(
+football_result["matches"]
+)
 
-    if df.empty:
-        st.info(
-            "La API respondió correctamente, pero no encontró partidos en las competiciones "
-            "incluidas en tu cobertura para esta fecha."
-        )
-    else:
-        st.success(f"Se encontraron {len(df)} partidos.")
-        st.dataframe(
-            df,
-            use_container_width=True,
-            hide_index=True,
-        )
 
-        st.divider()
-        st.subheader("🩸 JOYA TREND")
-        st.info(
-            "Siguiente etapa: usar estos partidos reales como entrada del Radar de Tendencias, "
-            "Núcleo Sangrado, S++ y Value."
-        )
+all_rows = sportsdb_rows + football_rows
 
-st.caption(
-    "La cantidad de partidos depende de las competiciones habilitadas en tu cuenta de football-data.org."
+
+if all_rows:
+
+df = pd.DataFrame(all_rows)
+
+df = df.drop_duplicates(
+subset=[
+"Local",
+"Visitante",
+"Fecha",
+]
+)
+
+st.success(
+f"Se encontraron {len(df)} partidos."
+)
+
+st.dataframe(
+df,
+use_container_width=True,
+hide_index=True,
+)
+
+else:
+
+st.warning(
+"Las APIs respondieron, pero no encontraron "
+"partidos disponibles para esta fecha."
+)
+
+
+with st.expander(
+"🧪 Diagnóstico de APIs",
+expanded=True,
+):
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric(
+"TheSportsDB",
+"Conectada"
+if sportsdb_result["ok"]
+else "Error",
+)
+
+c2.metric(
+"Partidos TheSportsDB",
+len(sportsdb_rows),
+)
+
+c3.metric(
+"football-data",
+"Conectada"
+if football_result["ok"]
+else "Error",
+)
+
+c4.metric(
+"Partidos football-data",
+len(football_rows),
+)
+
+
+st.divider()
+
+st.subheader("🩸 JOYA TREND")
+
+st.info(
+"Próximo paso: usar la cartelera encontrada "
+"para ejecutar automáticamente el Radar de "
+"Tendencias, Núcleo Sangrado, S++ y Value."
 )
