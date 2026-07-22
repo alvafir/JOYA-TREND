@@ -1,0 +1,2 @@
+JOYA X ENTERPRISE v1.0.2 SETTINGS HOTFIX
+Corrige KeyError: dream_min_confidence, dream_min_sample y dream_picks.
