@@ -1,2 +1,0 @@
-JOYA X ENTERPRISE v1.0.1 HOTFIX
-Corrige ImportError de modules.strategy_center y elimina cachés .pyc.
