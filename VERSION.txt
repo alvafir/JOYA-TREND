@@ -1,2 +1,0 @@
-JOYA X ENTERPRISE v1.1.1 PROJECTION IMPORT HOTFIX
-Corrige ImportError de get_fixture_statistics.
