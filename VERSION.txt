@@ -1,0 +1,2 @@
+JOYA X ENTERPRISE 4.0.1 RANKING HOTFIX
+Corrige KeyError de Confianza y Muestra.
