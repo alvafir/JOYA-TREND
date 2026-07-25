@@ -1,2 +1,0 @@
-JOYA X ENTERPRISE 4.0 PHASE 1
-Data Lake + Job Manager + Dashboard existente
